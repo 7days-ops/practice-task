@@ -1,0 +1,203 @@
+---
+- name: Prepare all nodes
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - software-properties-common
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Disable swap
+      shell: swapoff -a
+
+    - name: Remove swap from fstab
+      lineinfile:
+        path: /etc/fstab
+        regexp: '.*swap.*'
+        state: absent
+
+    - name: Load kernel modules
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Ensure kernel modules load on boot
+      copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+
+    - name: Configure sysctl for Kubernetes
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        reload: yes
+      loop:
+        - { key: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+        - { key: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+        - { key: 'net.ipv4.ip_forward', value: '1' }
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install containerd
+      apt:
+        name: containerd.io
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Create containerd config directory
+      file:
+        path: /etc/containerd
+        state: directory
+
+    - name: Generate default containerd config
+      shell: containerd config default > /etc/containerd/config.toml
+
+    - name: Configure containerd to use systemd cgroup driver
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^\s*SystemdCgroup = false'
+        line: '            SystemdCgroup = true'
+        backrefs: yes
+
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Add Kubernetes GPG key
+      apt_key:
+        url: https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Add Kubernetes repository
+      apt_repository:
+        repo: "deb https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /"
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Kubernetes packages
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Hold Kubernetes packages
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+      when: ansible_os_family == "Debian"
+
+    - name: Enable kubelet service
+      systemd:
+        name: kubelet
+        enabled: yes
+
+- name: Initialize Kubernetes master
+  hosts: k8s_master
+  become: yes
+  tasks:
+    - name: Check if cluster is already initialized
+      stat:
+        path: /etc/kubernetes/admin.conf
+      register: k8s_init
+
+    - name: Initialize Kubernetes cluster
+      shell: kubeadm init --pod-network-cidr=172.16.0.0/16
+      when: not k8s_init.stat.exists
+      register: kubeadm_init
+
+    - name: Create .kube directory
+      file:
+        path: /home/{{ ansible_user }}/.kube
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Copy admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/{{ ansible_user }}/.kube/config
+        remote_src: yes
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Install Flannel CNI
+      become_user: "{{ ansible_user }}"
+      shell: kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+      when: not k8s_init.stat.exists
+
+    - name: Get join command
+      shell: kubeadm token create --print-join-command
+      register: join_command
+
+    - name: Save join command to file
+      copy:
+        content: "{{ join_command.stdout }}"
+        dest: /tmp/k8s_join_command.sh
+        mode: '0755'
+
+    - name: Fetch join command to local
+      fetch:
+        src: /tmp/k8s_join_command.sh
+        dest: /tmp/k8s_join_command.sh
+        flat: yes
+
+- name: Join worker nodes
+  hosts: k8s_workers
+  become: yes
+  tasks:
+    - name: Check if node is already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: k8s_joined
+
+    - name: Copy join command to worker
+      copy:
+        src: /tmp/k8s_join_command.sh
+        dest: /tmp/k8s_join_command.sh
+        mode: '0755'
+      when: not k8s_joined.stat.exists
+
+    - name: Join worker to cluster
+      shell: /tmp/k8s_join_command.sh
+      when: not k8s_joined.stat.exists
