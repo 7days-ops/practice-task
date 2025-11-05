@@ -14,7 +14,7 @@ helm version
 
 
 
-Выберите один из вариантов:
+
 
 ### Minikube
 ```bash
