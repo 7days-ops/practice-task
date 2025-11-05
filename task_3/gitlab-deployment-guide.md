@@ -114,7 +114,7 @@ kubectl create namespace gitlab
 
 ```bash
 
-# Основные настройки
+
 global:
   # Настройка домена
   hosts:
@@ -131,11 +131,10 @@ global:
       nginx.ingress.kubernetes.io/ssl-redirect: "false"
     configureCertmanager: false
 
-  # Отключить HTTPS для упрощения (для production включите)
+  # Отключить HTTPS для упрощения 
   gitlab:
     https: false
 
-# Настройки для уменьшения требований к ресурсам (для локальной разработки)
 gitlab:
   gitaly:
     resources:
@@ -163,14 +162,14 @@ gitlab:
         cpu: 50m
         memory: 650Mi
 
-# PostgreSQL настройки
+
 postgresql:
   resources:
     requests:
       cpu: 100m
       memory: 256Mi
 
-# Redis настройки
+
 redis:
   resources:
     requests:
@@ -192,23 +191,22 @@ certmanager:
 ## Шаг 8: Установить GitLab с помощью Helm
 
 ```bash
-# Установка может занять 10-15 минут
+
 helm install gitlab gitlab/gitlab \
   --namespace gitlab \
   --timeout 600s \
   -f gitlab-values.yaml
 
-# Следить за процессом установки
+
 kubectl get pods -n gitlab --watch
 ```
 
 ## Шаг 9: Получить IP адрес Ingress
 
 ```bash
-# Получить NodePort или External IP
+
 kubectl get svc -n ingress-nginx
 
-# Если используете minikube
 minikube service ingress-nginx-controller -n ingress-nginx --url
 ```
 
@@ -227,7 +225,7 @@ echo "Ingress IP: $INGRESS_IP"
 
 ### 10.2 Обновить CoreDNS ConfigMap
 ```bash
-cat <<EOF > coredns-hosts-update.yaml
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -246,7 +244,7 @@ data:
             fallthrough
         }
     }
-EOF
+
 
 kubectl apply -f coredns-hosts-update.yaml
 kubectl -n kube-system rollout restart deployment coredns
@@ -274,21 +272,12 @@ kubectl get secret gitlab-gitlab-initial-root-password -n gitlab -o jsonpath='{.
 # Проверить ingress
 kubectl get ingress -n gitlab
 
-# Открыть GitLab в браузере (для minikube)
-echo "GitLab URL: http://gitlab.test.local"
 
-# Или использовать curl для проверки
+echo "GitLab URL: http://gitlab.test.local"
 curl -I http://gitlab.test.local
 ```
 
-## Шаг 13: Войти в GitLab
 
-1. Откройте браузер и перейдите на `http://gitlab.test.local`
-2. Войдите с учетными данными:
-   - Username: `root`
-   - Password: (пароль из Шага 11)
-
-## Дополнительные полезные команды
 
 ### Проверить статус всех подов GitLab
 ```bash
@@ -300,47 +289,5 @@ kubectl get pods -n gitlab -o wide
 kubectl logs -n gitlab <pod-name>
 ```
 
-### Удалить GitLab (если нужно переустановить)
-```bash
-helm uninstall gitlab -n gitlab
-kubectl delete namespace gitlab
-```
 
-### Остановить minikube
-```bash
-minikube stop
-```
 
-### Удалить кластер
-```bash
-minikube delete
-```
-
-## Troubleshooting
-
-### Pods не запускаются (pending)
-- Проверьте ресурсы кластера: `kubectl top nodes`
-- Увеличьте ресурсы minikube при запуске
-
-### GitLab недоступен по URL
-- Проверьте ingress: `kubectl get ingress -n gitlab`
-- Проверьте /etc/hosts на локальной машине
-- Проверьте что NGINX ingress работает: `kubectl get pods -n ingress-nginx`
-
-### DNS не резолвится внутри кластера
-- Проверьте CoreDNS: `kubectl get pods -n kube-system | grep coredns`
-- Проверьте логи CoreDNS: `kubectl logs -n kube-system -l k8s-app=kube-dns`
-- Тестируйте DNS из пода:
-  ```bash
-  kubectl run -it --rm debug --image=busybox --restart=Never -- nslookup gitlab.test.local
-  ```
-
-## Примечания
-
-- Этот гайд настроен для локальной разработки с минимальными требованиями к ресурсам
-- Для production окружения:
-  - Включите HTTPS и cert-manager
-  - Увеличьте ресурсы для всех компонентов
-  - Настройте persistent volumes
-  - Настройте backup и мониторинг
-  - Используйте внешнюю PostgreSQL и Redis
