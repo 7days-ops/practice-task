@@ -1,0 +1,88 @@
+global:
+  hosts:
+    domain: test.local
+    gitlab:
+      name: gitlab.test.local
+    registry:
+      name: registry.gitlab.test.local
+    minio:
+      name: minio.gitlab.test.local
+  
+  ingress:
+    configureCertmanager: false
+    class: traefik
+    tls:
+      enabled: false
+
+  # Use smaller resource requests for development/testing
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Disable nginx-ingress installation (using existing Traefik)
+nginx-ingress:
+  enabled: false
+
+# Disable cert-manager completely
+installCertmanager: false
+
+# Use smaller PostgreSQL for testing
+postgresql:
+  metrics:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Use smaller Redis for testing
+redis:
+  metrics:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Disable Prometheus to save resources
+prometheus:
+  install: false
+
+# Disable GitLab Runner
+gitlab-runner:
+  install: false
+
+# Configure GitLab components with smaller resources
+gitlab:
+  webservice:
+    minReplicas: 1
+    maxReplicas: 1
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+  
+  sidekiq:
+    minReplicas: 1
+    maxReplicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+  
+  gitaly:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+# Use smaller registry
+registry:
+  hpa:
+    minReplicas: 1
+    maxReplicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
