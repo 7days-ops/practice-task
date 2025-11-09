@@ -1,8 +1,8 @@
 Vagrant.configure("2") do |config|
   config.vm.define "master" do |master|
-    master.vm.box = "my-box-name"
+    master.vm.box = "Ubuntu-22.04"
     master.vm.hostname = "master"
-    master.vm.network "private_network", ip: "172.16.0.2", netmask: "255.255.0.0"
+    master.vm.network "private_network", ip: "192.168.0.10", netmask: "255.255.255.0"
 
     master.vm.provider "vmware_fusion" do |vmware|
       vmware.vmx["memsize"] = "2048"
@@ -12,9 +12,9 @@ Vagrant.configure("2") do |config|
 
 
   config.vm.define "worker1" do |worker|
-    worker.vm.box = "my-box-name"
+    worker.vm.box = "Ubuntu-22.04"
     worker.vm.hostname = "worker1"
-    worker.vm.network "private_network", ip: "172.16.0.11", netmask: "255.255.0.0"
+    worker.vm.network "private_network", ip: "192.168.0.11", netmask: "255.255.255.0"
 
     worker.vm.provider "vmware_fusion" do |vmware|
       vmware.vmx["memsize"] = "2048"
@@ -24,9 +24,9 @@ Vagrant.configure("2") do |config|
 
 
   config.vm.define "worker2" do |worker|
-    worker.vm.box = "my-box-name"
+    worker.vm.box = "Ubuntu-22.04"
     worker.vm.hostname = "worker2"
-    worker.vm.network "private_network", ip: "172.16.0.12", netmask: "255.255.0.0"
+    worker.vm.network "private_network", ip: "192.168.0.12", netmask: "255.255.255.0"
 
     worker.vm.provider "vmware_fusion" do |vmware|
       vmware.vmx["memsize"] = "2048"
