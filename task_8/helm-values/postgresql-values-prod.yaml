@@ -1,0 +1,59 @@
+# Helm values for PostgreSQL in Production environment
+# Chart: bitnami/postgresql
+
+global:
+  postgresql:
+    auth:
+      existingSecret: myapp-db-secret
+      secretKeys:
+        adminPasswordKey: password
+        userPasswordKey: password
+        replicationPasswordKey: password
+
+# Pod naming
+fullnameOverride: myapp-db-prod
+
+auth:
+  username: myapp_prod_user
+  database: myapp-db
+  existingSecret: myapp-db-secret
+
+primary:
+  podLabels:
+    app: myapp
+    component: database
+    environment: prod
+  
+  resources:
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+    requests:
+      memory: 1Gi
+      cpu: 1000m
+  
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ""  # Use default or specify production storage class
+  
+  service:
+    type: ClusterIP
+    ports:
+      postgresql: 5432
+
+# High Availability (optional - can be enabled for production)
+# architecture: replication
+# replication:
+#   enabled: true
+#   numStandBys: 1
+
+# Metrics (recommended for production monitoring)
+metrics:
+  enabled: true
+  
+# Backup configuration (recommended for production)
+# backup:
+#   enabled: true
+#   cronjob:
+#     schedule: "0 2 * * *"

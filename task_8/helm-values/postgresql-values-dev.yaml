@@ -1,0 +1,47 @@
+# Helm values for PostgreSQL in Dev environment
+# Chart: bitnami/postgresql
+
+global:
+  postgresql:
+    auth:
+      existingSecret: myapp-db-secret
+      secretKeys:
+        adminPasswordKey: password
+        userPasswordKey: password
+        replicationPasswordKey: password
+
+# Pod naming
+fullnameOverride: myapp-db-dev
+
+auth:
+  username: myapp_dev_user
+  database: myapp-db
+  existingSecret: myapp-db-secret
+
+primary:
+  podLabels:
+    app: myapp
+    component: database
+    environment: dev
+  
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
+    requests:
+      memory: 256Mi
+      cpu: 250m
+  
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""  # Use default storage class
+
+  service:
+    type: ClusterIP
+    ports:
+      postgresql: 5432
+
+# Metrics (optional, useful for monitoring)
+metrics:
+  enabled: false

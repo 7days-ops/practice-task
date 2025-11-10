@@ -1,0 +1,71 @@
+stages:
+  - prepare
+  - deploy
+
+variables:
+  NAMESPACE: monitoring
+  PROMETHEUS_CHART: prometheus-community/kube-prometheus-stack
+  PROMETHEUS_RELEASE: prometheus
+  GRAFANA_RELEASE: grafana
+  HELM_VERSION: "3.13.0"
+
+.helm_setup:
+  image: alpine/helm:${HELM_VERSION}
+  before_script:
+    - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    - helm repo add grafana https://grafana.github.io/helm-charts
+    - helm repo update
+
+create_namespace:
+  stage: prepare
+  image: bitnami/kubectl:latest
+  script:
+    - kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  only:
+    - main
+    - master
+
+deploy_prometheus:
+  stage: deploy
+  extends: .helm_setup
+  script:
+    - |
+      helm upgrade --install ${PROMETHEUS_RELEASE} ${PROMETHEUS_CHART} \
+        --namespace ${NAMESPACE} \
+        --create-namespace \
+        --wait \
+        --timeout 10m \
+        --set prometheus.prometheusSpec.retention=30d \
+        --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi \
+        --set grafana.enabled=false
+  only:
+    - main
+    - master
+  needs:
+    - create_namespace
+
+deploy_grafana:
+  stage: deploy
+  extends: .helm_setup
+  script:
+    - |
+      helm upgrade --install ${GRAFANA_RELEASE} grafana/grafana \
+        --namespace ${NAMESPACE} \
+        --create-namespace \
+        --wait \
+        --timeout 5m \
+        --set persistence.enabled=true \
+        --set persistence.size=10Gi \
+        --set adminPassword=${GRAFANA_ADMIN_PASSWORD:-admin} \
+        --set datasources."datasources\.yaml".apiVersion=1 \
+        --set datasources."datasources\.yaml".datasources[0].name=Prometheus \
+        --set datasources."datasources\.yaml".datasources[0].type=prometheus \
+        --set datasources."datasources\.yaml".datasources[0].url=http://${PROMETHEUS_RELEASE}-kube-prometheus-prometheus.${NAMESPACE}.svc.cluster.local:9090 \
+        --set datasources."datasources\.yaml".datasources[0].access=proxy \
+        --set datasources."datasources\.yaml".datasources[0].isDefault=true
+  only:
+    - main
+    - master
+  needs:
+    - create_namespace
+    - deploy_prometheus

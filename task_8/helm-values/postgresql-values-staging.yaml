@@ -1,0 +1,47 @@
+# Helm values for PostgreSQL in Staging environment
+# Chart: bitnami/postgresql
+
+global:
+  postgresql:
+    auth:
+      existingSecret: myapp-db-secret
+      secretKeys:
+        adminPasswordKey: password
+        userPasswordKey: password
+        replicationPasswordKey: password
+
+# Pod naming
+fullnameOverride: myapp-db-staging
+
+auth:
+  username: myapp_staging_user
+  database: myapp-db
+  existingSecret: myapp-db-secret
+
+primary:
+  podLabels:
+    app: myapp
+    component: database
+    environment: staging
+  
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+    requests:
+      memory: 512Mi
+      cpu: 500m
+  
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""  # Use default storage class
+
+  service:
+    type: ClusterIP
+    ports:
+      postgresql: 5432
+
+# Metrics (optional, useful for monitoring)
+metrics:
+  enabled: true
