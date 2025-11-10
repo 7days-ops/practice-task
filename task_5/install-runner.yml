@@ -1,0 +1,89 @@
+---
+- name: Install GitLab Runner on Worker Nodes
+  hosts: k8s_workers
+  become: yes
+  vars:
+    gitlab_runner_version: "latest"
+    gitlab_url: "http://gitlab.test.local"
+    runner_registration_token: "{{ lookup('env', 'GITLAB_RUNNER_TOKEN') }}"
+    runner_name: "k8s-runner-{{ inventory_hostname }}"
+  
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages for GitLab Runner
+      apt:
+        name:
+          - curl
+          - gnupg
+          - apt-transport-https
+          - ca-certificates
+          - openssh-client
+          - docker.io
+        state: present
+
+    - name: Add GitLab Runner APT repository key
+      apt_key:
+        url: https://packages.gitlab.com/gpg.key
+        state: present
+
+    - name: Add GitLab Runner repository
+      apt_repository:
+        repo: "deb https://packages.gitlab.com/runner/gitlab-runner/ubuntu/ {{ ansible_distribution_release }} main"
+        state: present
+        update_cache: yes
+
+    - name: Install GitLab Runner
+      apt:
+        name: gitlab-runner
+        state: present
+
+    - name: Add gitlab-runner user to docker group
+      user:
+        name: gitlab-runner
+        groups: docker
+        append: yes
+
+    - name: Enable and start GitLab Runner service
+      systemd:
+        name: gitlab-runner
+        enabled: yes
+        state: started
+
+    - name: Register GitLab Runner with docker executor
+      shell: |
+        gitlab-runner register \
+          --non-interactive \
+          --url "{{ gitlab_url }}" \
+          --registration-token "{{ runner_registration_token }}" \
+          --executor docker \
+          --docker-image ubuntu:22.04 \
+          --docker-volumes /var/run/docker.sock:/var/run/docker.sock \
+          --description "{{ runner_name }}" \
+          --tag-list "docker,k8s,shell" \
+          --locked=false \
+          --run-untagged=true \
+          --access-level "not_protected"
+      become_user: gitlab-runner
+      when: 
+        - runner_registration_token != ""
+      register: runner_registration
+      failed_when:
+        - runner_registration.rc != 0
+        - '"Runner already exists" not in runner_registration.stderr'
+
+    - name: Verify GitLab Runner is running
+      command: gitlab-runner verify
+      become_user: gitlab-runner
+
+    - name: Status check
+      command: gitlab-runner status
+      register: runner_status
+      become_user: gitlab-runner
+
+    - name: Display runner status
+      debug:
+        msg: "{{ runner_status.stdout_lines }}"
